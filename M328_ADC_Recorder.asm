@@ -28,7 +28,7 @@
 .ORG	ADCCaddr
 		rjmp	ADCcomplete
 .ORG	INT_VECTORS_SIZE
- 
+
 RESET:
 		ldi 	TEMP, high(RAMEND)
 		out 	SPH, TEMP
@@ -163,8 +163,12 @@ Play:
 		sbi 	GPIOR0, 1
 		reti			
 StopPlay:
-
-
+		;Enable OCIE1A  OCIE1A function stops T1 clock after OC1A Pin goes Low
+		;    and disables OCIE1A for one time event.
+		;Stop T0 clock 
+		lds 	YH, high(ADCreadAdd)
+		lds 	YL, low(ADCreadAdd)
+		
 
 		reti
 ;------------------------------------------------------------------------------
