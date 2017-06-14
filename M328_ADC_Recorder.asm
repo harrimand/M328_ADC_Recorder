@@ -14,6 +14,7 @@
 .equ	ADCreadAdd = SRAM_START + $12
 .equ	ADCtable = SRAM_START + $20
 .equ	ADCtableEnd = $07FF
+.equ	PWmin = 800
 
 .ORG	$0000
 		rjmp	RESET
@@ -24,7 +25,7 @@
 .ORG	OC0Aaddr
 		reti
 .ORG	OVF0addr
-		reti
+		rjmp	PlayNextValue
 .ORG	ADCCaddr
 		rjmp	ADCcomplete
 .ORG	INT_VECTORS_SIZE
@@ -82,7 +83,7 @@ MAIN:
 		nop
 		rjmp	MAIN
 ;------------------------------------------------------------------------------
-ADCcomplete:
+ADCcomplete:	;ADC Start triggered by TO Overflow  OCR0A = TOP
 		lds  	ADCin, ADCH
 		ldi 	YH, high(ADCwriteAdd)
 		ldi 	YL, low(ADCwriteAdd)
@@ -102,19 +103,19 @@ ADCcomplete:
 
 RecordFull:
 		clr 	TEMP
-		out 	TCCR0B, TEMP
+		out 	TCCR0B, TEMP	;Stop T0
 		ldi 	TEMP, (0<<ADEN)|(0<<ADATE)|(0<<ADIE)|(1<<ADPS1)|(1<<ADPS0)
-		sts 	ADCSRA, TEMP
+		sts 	ADCSRA, TEMP	;Stop ADC
 		ldi 	YH, high(ADCwriteAdd)
 		ldi 	YL, low(ADCwriteAdd)
 		ldi 	TEMP, low(ADCtable)
 		st  	Y+, TEMP
 		ldi 	TEMP, high(ADCtable)
-		st  	Y, TEMP
+		st  	Y, TEMP		;Reset ADCwriteAdd to ADCtable begin
 		reti
 
 ;------------------------------------------------------------------------------
-Record:
+Record:	;INT0 isr   Enable ADC and start T0
 		rcall	DBint
 		sbic	GPIOR0, 0
 		rjmp	StopRecord
@@ -128,35 +129,39 @@ Record:
 		reti
 StopRecord:
 		clr 	TEMP
-		out 	TCCR0B, TEMP
+		out 	TCCR0B, TEMP	;Stop T0
 		cbi 	PORTB, PB0	;Record Indicator Off
 		cbi 	GPIOR0, 0
 		reti		
 
 
 ;------------------------------------------------------------------------------
-Play:
+;Get ADC data table index stored in SRAM at ADCreadAdd
+;Enable OVF0 interrupt and Start T0 
+
+Play:	;INT1 isr  
 		rcall	DBint
 		sbic	GPIOR0, 1
 		rjmp	StopPlay
 
-		ldi 	YH, high(ADCreadAdd)
-		ldi 	YL, low(ADCreadAdd)
-		ld  	XL, Y+
-		ld  	XH, Y
-		ldi 	YH, high(ADCwriteAdd)
-		ldi 	YL, low(ADCwriteAdd)
-		ld  	ZL, Y+
-		ld  	ZH, Y
-		cp  	ZL, XL
-		cpc 	ZH, XH
+		lds 	XH, high(ADCreadAdd)
+		lds 	XL, low(ADCreadAdd)
+
+		lds 	YH, high(ADCwriteAdd)
+		lds 	YL, low(ADCwriteAdd)
+
+		cp  	YL, XL
+		cpc 	YH, XH
 		breq	StopPlay
 		ldi 	TEMP, low(ADCtableEnd)
 		cp  	XL, TEMP
 		ldi 	TEMP, high(ADCtableEnd)
 		cpc 	XH, TEMP
 		breq	StopPlay		
-;TODO  Read values and write to OCR1A
+
+		cbi 	EIMSK, INT0
+		ldi 	TEMP, (1<<TOIE0)
+		sts 	TIMSK0, TEMP	
 
 		ldi 	TEMP, (1<<WGM02)|(1<<CS02)|(0<<CS01)|(1<<CS00)
 		out 	TCCR0B, TEMP		
@@ -168,9 +173,27 @@ StopPlay:
 		;Stop T0 clock 
 		lds 	YH, high(ADCreadAdd)
 		lds 	YL, low(ADCreadAdd)
-		
+		sbi 	EIMSK, INT0
+		reti
+
+;------------------------------------------------------------------------------
+;Check if at end of written data or end of table
+;Read ADC Data, Multiply by 6 and output to OCR1A
+PlayNextValue:
+
+;TODO  Read values and write to OCR1A
+		ld  	ADCin, X+
+		ldi 	TEMP, $06
+		mul 	ADCin, TEMP
+		ldi 	TEMP, low(PWmin)
+		add 	R0, TEMP
+		ldi 	TEMP, high(PWmin)
+		adc 	R1, TEMP
+		sts 	OCR1AH, R1
+		sts 	OCR1AL, R0
 
 		reti
+
 ;------------------------------------------------------------------------------
 DBint:
 		ldi 	DBcount, $50
