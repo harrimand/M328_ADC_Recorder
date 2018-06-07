@@ -19,7 +19,7 @@ MACRO_START:
 #ifdef SIM
 		ldi 	TEMP, (0<<CS22)|(0<<CS21)|(1<<CS20)
 #else
-		ldi 	TEMP, (1<<CS22)|(0<<CS21)|(1<<CS20)
+		ldi 	TEMP, (1<<CS22)|(1<<CS21)|(1<<CS20)
 #endif
 		sts 	TCCR2B, TEMP
 		rjmp	Macro_Return
@@ -53,13 +53,13 @@ MACRO_DELAY_START:
 		push	TEMP
 		lds 	TEMP, OCR2A
 		push	TEMP
-		ldi 	TEMP, $FA
+		ldi 	TEMP, $FC
 		sts 	OCR2A, TEMP
 		ldi 	TEMP, (1<<OCIE2A)
 		sts 	TIMSK2, TEMP
 		ldi 	TEMP, (1<<WGM21)|(0<<WGM20)
 		sts 	TCCR2A, TEMP
-		ldi 	TEMP, (0<<WGM22)|(1<<CS02)|(0<<CS01)|(1<<CS00)
+		ldi 	TEMP, (0<<WGM22)|(1<<CS02)|(1<<CS01)|(1<<CS00)
 		sts 	TCCR2B, TEMP
 		sbi 	GPIOR0, 7
 		ldi 	TEMP, @0
@@ -68,8 +68,13 @@ DEL_Q_WAIT:
 		rjmp	DEL_Q_WAIT
 		rjmp	DELAY_END
 T2_DEL_Q:
+		sbi 	TIFR2, OCIE2A
 		dec 	TEMP
 		brne	CONTINUE_DELAY
+		cbi 	GPIOR0, 7
+CONTINUE_DELAY:
+		reti
+DELAY_END:
 		pop 	TEMP
 		sts 	OCR2A, TEMP
 		pop 	TEMP
@@ -78,13 +83,7 @@ T2_DEL_Q:
 		sts 	TCCR2A, TEMP
 		pop 	TEMP
 		sts 	TCCR2B, TEMP
-		cbi 	GPIOR0, 7
-CONTINUE_DELAY:
-		reti
-DELAY_END:
-
 .ENDMACRO
 ;-----------------------------------------------------------------------------
 .LISTMAC
-
 
